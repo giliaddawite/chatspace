@@ -79,19 +79,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log('');
-  console.log('   ====================================');
-  console.log(`   Chat API Server Started`);
-  console.log('   ====================================');
-  console.log(`   Environment: ${NODE_ENV}`);
-  console.log(`   Port: ${PORT}`);
-  console.log(`   URL: http://localhost:${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   API Info: http://localhost:${PORT}/api`);
-  console.log('   ====================================');
-  console.log('');
-});
+// Only start listening when server.js is run directly
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('');
+    console.log('   ====================================');
+    console.log(`   Chat API Server Started`);
+    console.log('   ====================================');
+    console.log(`   Environment: ${NODE_ENV}`);
+    console.log(`   Port: ${PORT}`);
+    console.log(`   URL: http://localhost:${PORT}`);
+    console.log(`   Health: http://localhost:${PORT}/health`);
+    console.log(`   API Info: http://localhost:${PORT}/api`);
+    console.log('   ====================================');
+    console.log('');
+  });
+}
 
 // Handle server errors
 app.on('error', (error) => {
@@ -112,4 +115,6 @@ app.on('error', (error) => {
       throw error;
   }
 });
+
+module.exports = app;
 

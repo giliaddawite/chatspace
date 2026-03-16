@@ -2,32 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { validateRoomCreation } = require('../middleware/validation');
-const db = require('../storage/database');
+const {
+  createRoom,
+  getAllRooms,
+  getRoombyID,
+  getRoombyName,
+} = require('../database/rooms');
 
-/**
- * POST /api/v1/rooms
- * Create a new chat room
- *
- * Authentication: Required
- * Request Body:
- *   - name (required): string, 3-50 characters
- *   - description (optional): string, max 200 characters
- *   - is_private (optional): boolean, default false
- *   - max_members (optional): integer, default unlimited
- *
- * Success Response: 201 Created
- * Error Responses:
- *   - 400: Validation error or room name already exists
- *   - 401: Not authenticated
- *   - 500: Server error
- */
-router.post('/', authenticate, validateRoomCreation, (req, res, next) => {
+// POST /api/v1/rooms
+router.post('/', authenticate, validateRoomCreation, async (req, res, next) => {
   try {
-    const { name, description, is_private, max_members } = req.validatedData;
-    const { username } = req.user;
+    const { name, description } = req.validatedData;
+    const userId = Number(req.user.id);
 
-    // Check if room name already exists
-    const existingRoom = db.getRoomByName(name);
+    const existingRoom = await getRoombyName(name);
     if (existingRoom) {
       return res.status(400).json({
         success: false,
@@ -39,95 +27,67 @@ router.post('/', authenticate, validateRoomCreation, (req, res, next) => {
       });
     }
 
-    // Create room
-    const room = db.createRoom({
-      name,
-      description,
-      is_private,
-      max_members,
-      created_by: username,
-    });
-
-    // Return created room
+    const room = await createRoom(name, description || '', userId);
     res.status(201).json({
       success: true,
       data: {
-        room: room.toJSON(),
+        room,
       },
     });
   } catch (error) {
+    if (error.message.includes('Room name already exists')) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'ROOM_NAME_EXISTS',
+          message: error.message,
+          field: 'name',
+        },
+      });
+    }
     next(error);
   }
 });
 
-/**
- * GET /api/v1/rooms
- * Get list of rooms (with pagination, filtering, sorting)
- *
- * Query Parameters:
- *   - page (optional): integer, default 1
- *   - limit (optional): integer, default 20
- *   - is_private (optional): boolean
- *   - sort_by (optional): string, default 'created_at'
- *   - order (optional): 'asc' | 'desc', default 'desc'
- *   - search (optional): string, search by name
- */
-router.get('/', (req, res, next) => {
+// GET /api/v1/rooms
+router.get('/', async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const isPrivate =
-      req.query.is_private !== undefined ? req.query.is_private === 'true' : undefined;
-    const sortBy = req.query.sort_by || 'created_at';
-    const order = req.query.order || 'desc';
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
     const search = req.query.search;
+    const order = req.query.order === 'asc' ? 'asc' : 'desc';
 
-    // Get all rooms
-    let rooms = Array.from(db.rooms.values());
+    const rooms = await getAllRooms();
 
-    // Apply filters
-    if (isPrivate !== undefined) {
-      rooms = rooms.filter((room) => room.is_private === isPrivate);
-    }
-
+    let filteredRooms = rooms;
     if (search) {
       const searchLower = search.toLowerCase();
-      rooms = rooms.filter((room) => room.name.toLowerCase().includes(searchLower));
+      filteredRooms = filteredRooms.filter((room) =>
+        room.name.toLowerCase().includes(searchLower)
+      );
     }
 
-    // Sort
-    rooms.sort((a, b) => {
-      let aVal = a[sortBy];
-      let bVal = b[sortBy];
-
-      if (sortBy === 'created_at') {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (order === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+    // Sort by created_at descending by default
+    filteredRooms.sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      return order === 'asc' ? aTime - bTime : bTime - aTime;
     });
 
-    // Paginate
-    const totalItems = rooms.length;
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalItems = filteredRooms.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
     const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedRooms = rooms.slice(startIndex, endIndex);
+    const roomPage = filteredRooms.slice(startIndex, startIndex + limit);
 
     res.json({
       success: true,
       data: {
-        rooms: paginatedRooms.map((room) => room.toJSON()),
+        rooms: roomPage,
         pagination: {
           current_page: page,
-          total_pages: totalPages,
-          total_items: totalItems,
           per_page: limit,
+          total_items: totalItems,
+          total_pages: totalPages,
           has_next: page < totalPages,
           has_previous: page > 1,
         },
@@ -138,15 +98,22 @@ router.get('/', (req, res, next) => {
   }
 });
 
-/**
- * GET /api/v1/rooms/:roomId
- * Get a specific room by ID
- */
-router.get('/:roomId', (req, res, next) => {
+// GET /api/v1/rooms/:roomId
+router.get('/:roomId', async (req, res, next) => {
   try {
-    const roomId = parseInt(req.params.roomId);
-    const room = db.getRoomById(roomId);
+    const roomId = Number(req.params.roomId);
+    if (Number.isNaN(roomId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Valid room ID is required',
+          field: 'roomId',
+        },
+      });
+    }
 
+    const room = await getRoombyID(roomId);
     if (!room) {
       return res.status(404).json({
         success: false,
@@ -160,7 +127,7 @@ router.get('/:roomId', (req, res, next) => {
     res.json({
       success: true,
       data: {
-        room: room.toJSON(),
+        room,
       },
     });
   } catch (error) {

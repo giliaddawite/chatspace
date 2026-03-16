@@ -26,8 +26,8 @@ async function createUser(username, email, passwordHash) {
         throw new Error('Username, email, and password are required');
       }
   
-      if (username.length < 3 || username.length > 20) {
-        throw new Error('Username must be between 3 and 20 characters');
+      if (username.length < 3 || username.length > 50) {
+        throw new Error('Username must be between 3 and 50 characters');
       }
       
       // Check if username already exists
@@ -164,7 +164,120 @@ async function getAllUsers() {
         console.error('Error getting all users:', error.message);
         throw error;
     }
-}   
+}  
+
+/** 
+ * Store a refresh token in the database
+ * Called after login or register when issuing a new token pair.
+ * 
+ * @param {number} userId - The user this token belongs to
+ * @param {string} jti - Unique token ID (from crypto.randomBytes)
+ * @param {string} token - The full JWT refresh token string
+ * @param {string|null} expiresAt - ISO timestamp of when it expires
+ * @returns {Promise<Object>} The stored token record
+ */
+
+async function storeRefreshToken(userId, jti, token, expiresAt) {
+    try {
+        if (!userId || !jti || !token) {
+            throw new Error('userId, jti, and token are required');
+        }
+        
+        const result = await pool.query(
+            'INSERT INTO refresh_tokens (user_id, jti, token, expires_at) VALUES ($1, $2, $3, $4) RETURNING user_id, jti, expires_at, revoked, created_at',
+            [userId, jti, token, expiresAt]
+        );
+
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error storing refresh token:', error);
+        throw error;
+    }
+}
+
+/**
+ * Look up a refresh token by its unique ID (jti)
+ * Called during token refresh to check if the token is still valid.
+ * This is Gate #3 in the refresh flow.
+ * 
+ * @param {string} jti - The token's unique ID
+ * @returns {Promise<Object|null>} Token record or null if not found
+ */
+
+async function getRefreshToken(jti) {
+    try {
+        if (!jti) {
+            throw new Error('jti is required');
+        }
+
+        const result = await pool.query(
+            'SELECT user_id, jti, expires_at, revoked FROM refresh_tokens WHERE jti = $1',
+            [jti]
+        );
+
+        if (result.rows.length === 0) {
+            return null;
+        }
+
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error getting refresh token:', error);
+        throw error;
+    }
+}
+
+/**
+ * Revoke a single refresh token (token rotation)
+ * Called after a refresh token is used — we mark it as revoked
+ * so it can never be used again. This is token rotation.
+ * 
+ * @param {string} jti - The token's unique ID
+ * @returns {Promise<boolean>} true if revoked, false if token not found
+ */
+
+async function revokeRefreshToken(jti) {
+    try {
+        if (!jti) {
+            throw new Error('jti is required');
+        }
+    
+        const result = await pool.query(
+            'UPDATE refresh_tokens SET revoked = true WHERE jti = $1 RETURNING jti',
+            [jti]
+        );
+        return result.rows.length > 0;
+    } catch (error) {
+        console.error('Error revoking refresh token:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Revoke ALL refresh tokens for a user (logout from all devices)
+ * Called when a user hits the logout endpoint.
+ * Every session they have — phone, laptop, tablet — gets killed.
+ * 
+ * @param {number} userId - The user whose tokens should be revoked
+ * @returns {Promise<number>} Number of tokens revoked
+ */
+
+async function revokeAllUserRefreshTokens(userId) {
+    try {
+        if (!userId) {
+            throw new Error('userId is required');
+        }
+        const result = await pool.query(
+            'UPDATE refresh_tokens SET revoked = true WHERE user_id = $1 AND revoked = false RETURNING jti',
+            [userId]
+        );
+        console.log(`Revoked ${result.rowCount} refresh tokens for user ${userId}`);
+        return result.rowCount;
+
+    } catch (error) {
+        console.error('Error revoking all refresh tokens for user:', error.message);
+        throw error;
+    }
+}
 
 module.exports = {
     createUser,
@@ -172,5 +285,8 @@ module.exports = {
     getUserByUsername,
     getAllUsers,
     getUserByEmail,
+    storeRefreshToken,
+    getRefreshToken,
+    revokeRefreshToken,
+    revokeAllUserRefreshTokens,
 };
-
