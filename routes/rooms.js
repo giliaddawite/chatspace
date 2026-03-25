@@ -28,6 +28,9 @@ router.post('/', authenticate, validateRoomCreation, async (req, res, next) => {
     }
 
     const room = await createRoom(name, description || '', userId);
+
+    req.app.get('io').emit('room_created', { room });
+
     res.status(201).json({
       success: true,
       data: {

@@ -9,13 +9,18 @@
  */
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
+const initializeSocket = require('./socket');
 require('dotenv').config();
 
 const app = express();
 
+const server = http.createServer(app);
+
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
 
 // Middleware
 // CORS: allow requests from the frontend origin
@@ -80,8 +85,10 @@ app.use((err, req, res, next) => {
 });
 
 // Only start listening when server.js is run directly
-if (require.main === module) {
-  app.listen(PORT, () => {
+if (require.main === module){
+  const io = initializeSocket(server);
+  app.set('io', io);
+  server.listen(PORT, () => {
     console.log('');
     console.log('   ====================================');
     console.log(`   Chat API Server Started`);
@@ -97,7 +104,7 @@ if (require.main === module) {
 }
 
 // Handle server errors
-app.on('error', (error) => {
+server.on('error', (error) => {
   if (error.syscall !== 'listen') {
     throw error;
   }
