@@ -5,9 +5,9 @@
  * Command: node database/test-messages.js
  */
 
-const messageDB = require('./messages');
-const userDB = require('./users');
-const roomDB = require('./rooms');
+const messageDB = require('../database/messages');
+const userDB = require('../database/users');
+const roomDB = require('../database/rooms');
 
 async function runMessageTests() {
   console.log('🧪 Starting message database tests...\n');

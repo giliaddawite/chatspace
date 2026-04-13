@@ -11,6 +11,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const initializeSocket = require('./socket');
 require('dotenv').config();
 
@@ -46,6 +47,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Rate limiters
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                   // 10 requests per window per IP
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts, please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts, please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Routes
 const roomsRoutes = require('./routes/rooms');
 const messagesRoutes = require('./routes/messages');
@@ -53,6 +71,9 @@ const authRoutes = require('./middleware/auth');
 
 app.use('/api/v1/rooms', roomsRoutes);
 app.use('/api/v1/rooms', messagesRoutes);
+app.post('/api/auth/login', authLimiter);
+app.post('/api/auth/register', authLimiter);
+app.post('/api/auth/refresh', refreshLimiter);
 app.use('/api/auth', authRoutes);
 
 // Health check

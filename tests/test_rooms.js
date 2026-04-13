@@ -5,8 +5,8 @@
  * Command: node database/test-rooms.js
  */
 
-const roomDB = require('./rooms');
-const userDB = require('./users');
+const roomDB = require('../database/rooms');
+const userDB = require('../database/users');
 
 async function runRoomTests() {
   console.log('Starting room database tests...\n');

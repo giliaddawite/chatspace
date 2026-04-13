@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-export const API = axios.create({ baseURL: 'http://localhost:3000/api' });
+const BASE_URL = process.env.REACT_APP_API_URL;
+
+export const API = axios.create({ baseURL: `${BASE_URL}/api` });
 
 let _authState = null;
 let _setAuthState = null;
@@ -22,7 +24,7 @@ API.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const res = await axios.post('http://localhost:3000/api/auth/refresh', {
+        const res = await axios.post(`${BASE_URL}/api/auth/refresh`, {
           refresh_token: _authState.refresh_token,
         });
 

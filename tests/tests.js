@@ -1,7 +1,7 @@
 // Tests for the database operations
 
-const pool = require('./connection');
-const userDB = require('./users');
+const pool = require('../database/connection');
+const userDB = require('../database/users');
 
 async function runTests() {
   try {
