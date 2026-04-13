@@ -6,4 +6,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 _cursor_generated_backup/
+.firebase/
+.agents/
+.claude/
+skills-lock.json
+tmp-room-test.js
+verify_message_endpoints.js
 
