@@ -14,6 +14,7 @@ const {
 } = require('../database/users');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-for-dev';
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'super-refresh-secret-for-dev';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '15m';
 const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
 
@@ -28,7 +29,7 @@ async function createTokenPair(user) {
   const refreshJti = crypto.randomBytes(16).toString('hex');
   const refreshToken = jwt.sign(
     { id: user.id, jti: refreshJti, type: 'refresh' },
-    JWT_SECRET,
+    REFRESH_SECRET,
     { expiresIn: JWT_REFRESH_EXPIRY }
   );
 
@@ -239,7 +240,7 @@ router.post('/refresh', async (req, res) => {
 
   let payload;
   try {
-    payload = jwt.verify(refresh_token, JWT_SECRET);
+    payload = jwt.verify(refresh_token, REFRESH_SECRET);
   } catch (error) {
     return res.status(401).json({
       success: false,
