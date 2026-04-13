@@ -39,7 +39,7 @@ function initializeSocket(server) {
   const io = new Server(server, {
     cors: {
       origin: process.env.NODE_ENV === 'production'
-        ? 'https://your-frontend-domain.com'
+        ? process.env.ALLOWED_ORIGIN
         : 'http://localhost:3001',
       methods: ['GET', 'POST'],
       credentials: true,

@@ -29,7 +29,7 @@ app.use(
   cors({
     origin:
       NODE_ENV === 'production'
-        ? 'https://your-frontend-domain.com'
+        ? process.env.ALLOWED_ORIGIN
         : 'http://localhost:3001',
     credentials: true,
   })
